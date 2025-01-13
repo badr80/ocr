@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image Text Extractor</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.0/dist/tesseract.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+      text-align: center;
+    }
+    .result {
+      margin-top: 20px;
+      white-space: pre-wrap;
+      background: #f9f9f9;
+      padding: 15px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      position: relative;
+    }
+    .paste-area {
+      margin-top: 20px;
+      padding: 20px;
+      border: 2px dashed #ccc;
+      border-radius: 5px;
+      background: #fafafa;
+      color: #666;
+      cursor: pointer;
+    }
+    .paste-area:hover {
+      background: #f0f0f0;
+    }
+    .copy-button {
+      margin-bottom: 10px;
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .copy-button:hover {
+      background-color: #45a049;
+    }
+    #progressContainer {
+      margin-top: 10px;
+      width: 100%;
+      height: 20px;
+      background: #eee;
+      border: 2px solid #ccc;
+      border-radius: 5px;
+      position: relative;
+      display: none; /* Initially hidden */
+    }
+    #progressBar {
+      height: 100%;
+      width: 0;
+      background: #4CAF50;
+      border-radius: 5px;
+    }
+    #progressPercentage {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      font-weight: bold;
+      color: black;
+      line-height: 20px;
+    }
+    /* Make it responsive for smaller screens like mobile */
+    @media (max-width: 600px) {
+      .container {
+        padding: 10px;
+      }
+      .paste-area {
+        padding: 15px;
+      }
+      .copy-button {
+        width: 100%;
+      }
+    }
+    .button-container {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    #videoElement {
+      width: 100%;
+      height: auto;
+      border-radius: 5px;
+    }
+    #captureButton {
+      margin-top: 10px;
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #captureButton:hover {
+      background-color: #45a049;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Image Text Extractor</h1>
+    <p>Upload an image, paste from your clipboard, or use the camera to capture an image.</p>
+
+    <!-- Button Container for Camera and Browse -->
+    <div class="button-container">
+      <button id="useCamera" class="copy-button">Use Camera</button>
+      <button id="browseButton" class="copy-button" onclick="document.getElementById('imageUpload').click();">Browse</button>
+      <select id="languageSelect" class="copy-button" style="background-color: white; color: black;">
+        <option value="" selected>Autodetect</option>
+        <option value="eng">English</option>
+        <option value="ara">Arabic</option>
+        <option value="spa">Spanish</option>
+        <option value="fra">French</option>
+        <option value="deu">German</option>
+      </select>
+    </div>
+    
+    <br>
+    <!-- File upload input -->
+    <input type="file" id="imageUpload" accept="image/*" style="display:none;">
+    <div class="paste-area" id="pasteArea" tabindex="0">Click here and paste an image (Ctrl+V).</div>
+
+    <div id="loading" style="display: none;">
+      Processing image, please wait...
+      <div id="progressContainer">
+        <div id="progressBar"></div>
+        <div id="progressPercentage">0%</div>
+      </div>
+    </div>
+
+    <div id="result" class="result" style="display: none;">
+      <button id="copyButton" class="copy-button" style="display: none;">Copy All</button>
+      <div id="extractedText"></div>
+    </div>
+  </div>
+
+  <script>
+    const imageUpload = document.getElementById('imageUpload');
+    const pasteArea = document.getElementById('pasteArea');
+    const loading = document.getElementById('loading');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressBar = document.getElementById('progressBar');
+    const progressPercentage = document.getElementById('progressPercentage');
+    const result = document.getElementById('result');
+    const extractedText = document.getElementById('extractedText');
+    const copyButton = document.getElementById('copyButton');
+    const useCamera = document.getElementById('useCamera');
+    const videoElement = document.createElement('video');
+    const languageSelect = document.getElementById('languageSelect');
+    let videoStream;
+
+    // Function to process image for OCR
+    function processImage(imageSrc) {
+      const selectedLanguage = languageSelect.value || 'eng'; // Default to English if no language selected
+      result.style.display = 'none';
+      loading.style.display = 'block';
+      progressContainer.style.display = 'none'; // Initially hidden
+      
+      Tesseract.recognize(imageSrc, selectedLanguage, {
+        logger: ({ progress }) => {
+          if (progress > 0) {
+            progressContainer.style.display = 'block'; // Show progress bar after OCR starts
+          }
+          const percentage = Math.round(progress * 100);
+          progressBar.style.width = `${percentage}%`;
+          progressPercentage.textContent = `${percentage}%`;
+        },
+      }).then(({ data: { text } }) => {
+        loading.style.display = 'none';
+        result.style.display = 'block';
+        extractedText.textContent = text;
+        copyButton.style.display = 'inline-block'; // Show the Copy button
+      }).catch(err => {
+        loading.style.display = 'none';
+        alert('Error processing image: ' + err.message);
+      });
+    }
+
+    // Handle file upload
+    imageUpload.addEventListener('change', () => {
+      const file = imageUpload.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function () {
+          processImage(reader.result);
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // Handle image paste
+    pasteArea.addEventListener('paste', (event) => {
+      const items = (event.clipboardData || event.originalEvent.clipboardData).items;
+      for (let item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          const reader = new FileReader();
+          reader.onload = function () {
+            processImage(reader.result);
+          };
+          reader.readAsDataURL(file);
+          return;
+        }
+      }
+      alert('Please paste a valid image.');
+    });
+
+    // Focus paste area to enable paste
+    pasteArea.addEventListener('click', () => {
+      pasteArea.focus();
+    });
+
+    // Automatically focus the paste area on page load for better UX
+    window.onload = () => {
+      pasteArea.focus();
+    };
+
+    // Handle "Copy All" button click
+    copyButton.addEventListener('click', () => {
+      const textToCopy = extractedText.textContent;
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        alert('Text copied to clipboard!');
+      }).catch(err => {
+        alert('Failed to copy text: ' + err.message);
+      });
+    });
+
+    // Use camera button click
+    useCamera.addEventListener('click', () => {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: true })
+          .then((stream) => {
+            videoStream = stream;
+            videoElement.srcObject = stream;
+            videoElement.autoplay = true;
+            document.body.appendChild(videoElement);
+            videoElement.style.width = '100%';
+
+            // Create a capture button
+            const captureButton = document.createElement('button');
+            captureButton.textContent = 'Capture Image';
+            captureButton.id = 'captureButton';
+            document.body.appendChild(captureButton);
+
+            captureButton.addEventListener('click', () => {
+              const canvas = document.createElement('canvas');
+              canvas.width = videoElement.videoWidth;
+              canvas.height = videoElement.videoHeight;
+              const context = canvas.getContext('2d');
+              context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+              const imageData = canvas.toDataURL('image/png');
+
+              // Stop the video stream and remove elements
+              videoStream.getTracks().forEach(track => track.stop());
+              videoElement.remove();
+              captureButton.remove();
+
+              // Process the captured image
+              processImage(imageData);
+            });
+          })
+          .catch((err) => {
+            alert('Error accessing camera: ' + err.message);
+          });
+      } else {
+        alert('Camera not supported on this device.');
+      }
+    });
+  </script>
+</body>
+</html>
